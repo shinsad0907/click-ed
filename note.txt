@@ -1,0 +1,2 @@
+đang làm tọa độ click 
+tí nữa v ề chỉ cần thay vào click ABCD ở phần main_clicked là được rồi làm thuật toán lại là chạy
