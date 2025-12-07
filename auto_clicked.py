@@ -27,7 +27,7 @@ class ldplayer:
 
     def capture_ldplayer_screen(self):
         # Tên cửa sổ LDPlayer (bạn có thể đổi lại nếu khác)
-        window_name = "LDPlayer-1"
+        window_name = "LDPlayer"
         
         filename = "data_image/ldplayer_screenshot.png"
 
@@ -162,7 +162,38 @@ class ldplayer:
                     question = desc
 
         return question + "\n" +answers["A"][0] + "\n" +answers["B"][0] + "\n" +answers["C"][0] + "\n" +answers["D"][0]
+    def detect_unfinished_lessons(self):
+        """
+        Trả về list duy nhất gồm các bài chưa làm: ['A','B','C',...]
+        Không quan tâm chương số.
+        """
+        xml_file = self.dump_xml()
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        result = set()
+
+        for node in root.iter("node"):
+            desc = node.attrib.get("content-desc", "")
+            if not desc:
+                continue
+
+            # Tìm dạng 1.A, 2.B, 10.C, ... → chỉ lấy chữ A/B/C
+            m = re.search(r"\d+\.([A-Za-z])", desc)
+            if not m:
+                continue
+
+            letter = m.group(1).upper()
+
+            # Kiểm tra bài chưa làm
+            if ("Điểm đạt được: 0" in desc) or re.search(r"\b0/20\b", desc):
+                result.add(letter)
+
+        return sorted(list(result))
+
+
 
 # ld = ldplayer()
-# path = ld.capture_ldplayer_screen()
+# path = ld.detect_unfinished_lessons()
+# print(path)
 

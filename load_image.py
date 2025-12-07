@@ -10,7 +10,7 @@ pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tessera
 
 class LoadImage:
     def __init__(self) -> None:
-        self.image_path = r"C:\Users\pc\Desktop\shin\tool_click_ed\data_image\ldplayer_screenshot.png"
+        self.image_path = r"data_image\ldplayer_screenshot.png"
         self.reader = easyocr.Reader(['vi'])
     def get_chapter(self, image_path):
         """

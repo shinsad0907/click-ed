@@ -110,8 +110,7 @@ class MainClicked:
                     x, y = self.click_homework
                     ld.click(x, y)
                     sleep(2)
-                    chapter_homework = ld.capture_ldplayer_screen()
-                    homework_session = LoadImage().get_lesson_homework(chapter_homework)
+                    homework_session = ld.detect_unfinished_lessons()
                     print("Bài tập cần làm shinsad:", homework_session)
                     if homework_session:
                         for hw in homework_session:
