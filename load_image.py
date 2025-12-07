@@ -160,6 +160,12 @@ class LoadImage:
             print(f"🎯 Tất cả đã hoàn thành → Chương tiếp theo: {next_chapter}")
             return next_chapter
         
+        # Ưu tiên 4: Nếu tất cả chương đều bị khóa thì làm chương 1
+        locked_chapters = [ch for ch in chapters_found if ch['status'] == 'locked']
+        if len(locked_chapters) == len(chapters_found):
+            print(f"⚠️ Tất cả chương đều bị khóa → Mặc định làm chương 1")
+            return 1
+        
         print("⚠ Không xác định được chương cần làm")
         return None
     
@@ -171,75 +177,91 @@ class LoadImage:
             image_path: Đường dẫn đến ảnh màn hình video
         
         Returns:
-            dict: {'current': giây hiện tại, 'total': tổng giây, 'remaining': giây còn lại}
+            int: số giây còn lại (tối thiểu 1 giây nếu không tìm được)
         """
-        # Khởi tạo EasyOCR reader (chỉ English cho số)
-        reader = easyocr.Reader(['en'], gpu=False)
-        
-        # Đọc ảnh
-        img = cv2.imread(image_path)
-        h, w = img.shape[:2]
-        
-        # Thử nhiều vùng khác nhau
-        regions = [
-            img[int(h*0.95):h, int(w*0.65):w],  # Góc dưới phải sát đáy
-            img[int(h*0.90):h, int(w*0.60):w],  # Rộng hơn
-            img[int(h*0.85):h, int(w*0.50):w],  # Rộng nhất
-        ]
-        
-        # Pattern linh hoạt hơn cho thời gian
-        time_patterns = [
-            r'(\d{1,2}):(\d{2})\s*/\s*(\d{1,2}):(\d{2})',  # 00:36 / 02:07
-            r'(\d{1,2}):(\d{2})/(\d{1,2}):(\d{2})',        # 00:36/02:07
-            r'(\d{1,2}):(\d{2})\s+/\s+(\d{1,2}):(\d{2})',  # Nhiều space
-            r'(\d+):(\d+)\D+(\d+):(\d+)',                   # Bất kỳ ký tự nào giữa
-        ]
-        
-        for region in regions:
-            # Preprocess: tăng contrast và làm sáng
-            gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
-            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        try:
+            # Khởi tạo EasyOCR reader (chỉ English cho số)
+            reader = easyocr.Reader(['en'], gpu=False)
             
-            # OCR với allowlist chỉ số và dấu
-            results = reader.readtext(thresh, detail=0, allowlist='0123456789:/ ')
+            # Đọc ảnh
+            img = cv2.imread(image_path)
+            if img is None:
+                print("⚠️ Không đọc được ảnh video, sử dụng thời gian mặc định 60 giây")
+                return 60
             
-            print(f"DEBUG - OCR results: {results}")  # Debug
+            h, w = img.shape[:2]
             
-            # Ghép tất cả text lại
-            full_text = ' '.join(results)
+            # Thử nhiều vùng khác nhau
+            regions = [
+                img[int(h*0.95):h, int(w*0.65):w],  # Góc dưới phải sát đáy
+                img[int(h*0.90):h, int(w*0.60):w],  # Rộng hơn
+                img[int(h*0.85):h, int(w*0.50):w],  # Rộng nhất
+            ]
             
-            # Thử tất cả pattern
-            for pattern in time_patterns:
-                match = re.search(pattern, full_text)
-                if match:
-                    try:
-                        current_min = int(match.group(1))
-                        current_sec = int(match.group(2))
-                        current_total = current_min * 60 + current_sec
-                        
-                        total_min = int(match.group(3))
-                        total_sec = int(match.group(4))
-                        total_total = total_min * 60 + total_sec
-                        
-                        remaining = total_total - current_total
-                        
-                        return remaining
-                    except:
-                        continue
-        
-        return None
+            # Pattern linh hoạt hơn cho thời gian
+            time_patterns = [
+                r'(\d{1,2}):(\d{2})\s*/\s*(\d{1,2}):(\d{2})',  # 00:36 / 02:07
+                r'(\d{1,2}):(\d{2})/(\d{1,2}):(\d{2})',        # 00:36/02:07
+                r'(\d{1,2}):(\d{2})\s+/\s+(\d{1,2}):(\d{2})',  # Nhiều space
+                r'(\d+):(\d+)\D+(\d+):(\d+)',                   # Bất kỳ ký tự nào giữa
+            ]
+            
+            for region in regions:
+                # Preprocess: tăng contrast và làm sáng
+                gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+                _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                
+                # OCR với allowlist chỉ số và dấu
+                results = reader.readtext(thresh, detail=0, allowlist='0123456789:/ ')
+                
+                print(f"DEBUG - OCR results: {results}")  # Debug
+                
+                # Ghép tất cả text lại
+                full_text = ' '.join(results)
+                
+                # Thử tất cả pattern
+                for pattern in time_patterns:
+                    match = re.search(pattern, full_text)
+                    if match:
+                        try:
+                            current_min = int(match.group(1))
+                            current_sec = int(match.group(2))
+                            current_total = current_min * 60 + current_sec
+                            
+                            total_min = int(match.group(3))
+                            total_sec = int(match.group(4))
+                            total_total = total_min * 60 + total_sec
+                            
+                            remaining = total_total - current_total
+                            
+                            # Nếu remaining âm hoặc 0, trả về 5 giây (default)
+                            if remaining <= 0:
+                                print(f"⚠️ Thời gian âm hoặc 0 ({remaining}s), sử dụng 5 giây mặc định")
+                                return 5
+                            
+                            print(f"✅ Phát hiện thời gian còn lại: {remaining} giây")
+                            return remaining
+                        except Exception as e:
+                            print(f"⚠️ Lỗi parse thời gian: {e}")
+                            continue
+            
+            print("⚠️ Không phát hiện được thời gian video, sử dụng 60 giây mặc định")
+            return 60
+        except Exception as e:
+            print(f"⚠️ Lỗi trong get_video_remaining_time: {e}")
+            return 60
     
     def get_lesson_status(self, image_path):
         """
-        Phát hiện buổi học chưa hoàn thành - PHƯƠNG PHÁP TỐI ƯU
+        Phát hiện buổi học chưa hoàn thành - PHIÊN BẢN ĐÃ SỬA
         
         Chiến lược:
         1. Tìm tất cả text có pattern X.Y (ví dụ: 3.A, 3.B, 3.C, 3.D)
-        2. Nếu thiếu → ước lượng vị trí dựa trên khoảng cách đều
+        2. CHỈ xử lý các buổi THỰC SỰ tìm thấy (không giả định 4 buổi)
         3. Kiểm tra màu xanh (checkmark) tại mỗi vị trí
         
         Returns:
-            list: [1, 2, 3, 4] - các buổi chưa hoàn thành
+            list: [1, 2, 3, 4] - các buổi chưa hoàn thành (số thứ tự thực tế)
         """
         img = cv2.imread(image_path)
         if img is None:
@@ -281,82 +303,18 @@ class LoadImage:
             print("❌ Không tìm thấy buổi học nào")
             return []
         
-        # === BỔ SUNG BUỔI THIẾU (nếu có) ===
-        detected_letters = list(lessons_detected.keys())
-        expected_letters = ['A', 'B', 'C', 'D']
-        missing_letters = [l for l in expected_letters if l not in detected_letters]
-        
-        if missing_letters:
-            print(f"\n⚠️ Thiếu các buổi: {missing_letters}")
-            print("🔧 Đang ước lượng vị trí...")
-            
-            # Lấy các Y đã có
-            y_coords = sorted([info['y'] for info in lessons_detected.values()])
-            
-            # Tính khoảng cách trung bình
-            if len(y_coords) >= 2:
-                gaps = [y_coords[i+1] - y_coords[i] for i in range(len(y_coords)-1)]
-                avg_gap = sum(gaps) / len(gaps)
-            else:
-                avg_gap = 150  # Default
-            
-            print(f"   Khoảng cách trung bình: {avg_gap:.0f}px")
-            
-            # Lấy X chung (giả sử tất cả buổi có X gần nhau)
-            x_common = int(np.mean([info['x'] for info in lessons_detected.values()]))
-            
-            # Lấy chapter từ buổi đã tìm được
-            chapter = list(lessons_detected.values())[0]['chapter']
-            
-            # Ước lượng vị trí cho các buổi thiếu
-            all_positions = {}
-            
-            for i, letter in enumerate(expected_letters):
-                if letter in lessons_detected:
-                    all_positions[letter] = lessons_detected[letter]
-                else:
-                    # Ước lượng Y dựa trên vị trí trong alphabet
-                    # Tìm buổi gần nhất đã có
-                    if detected_letters:
-                        # Tính Y dựa trên khoảng cách đều
-                        if i > 0 and expected_letters[i-1] in all_positions:
-                            # Dựa vào buổi trước
-                            prev_y = all_positions[expected_letters[i-1]]['y']
-                            estimated_y = int(prev_y + avg_gap)
-                        elif i < len(expected_letters)-1 and expected_letters[i+1] in lessons_detected:
-                            # Dựa vào buổi sau
-                            next_y = lessons_detected[expected_letters[i+1]]['y']
-                            estimated_y = int(next_y - avg_gap)
-                        else:
-                            # Dựa vào buổi đầu tiên
-                            first_y = y_coords[0]
-                            estimated_y = int(first_y + i * avg_gap)
-                        
-                        all_positions[letter] = {
-                            'chapter': chapter,
-                            'y': estimated_y,
-                            'x': x_common,
-                            'has_checkmark': False,
-                            'estimated': True
-                        }
-                        print(f"   ✓ Ước lượng buổi {chapter}.{letter} tại Y={estimated_y}")
-        else:
-            all_positions = lessons_detected
+        print(f"\n📊 Tổng số buổi tìm thấy: {len(lessons_detected)}")
         
         # === KIỂM TRA CHECKMARK CHO MỖI BUỔI ===
         print("\n" + "=" * 60)
         print("KIỂM TRA TRẠNG THÁI")
         print("=" * 60)
         
-        for letter in ['A', 'B', 'C', 'D']:
-            if letter not in all_positions:
-                continue
-            
-            info = all_positions[letter]
+        for letter in sorted(lessons_detected.keys()):
+            info = lessons_detected[letter]
             y = info['y']
             x = info['x']
             chapter = info['chapter']
-            is_estimated = info.get('estimated', False)
             
             # Vùng kiểm tra: bên TRÁI text (icon checkmark thường ở đây)
             y_start = max(0, y - 50)
@@ -372,14 +330,13 @@ class LoadImage:
                 continue
             
             # Phát hiện màu xanh lá (checkmark)
-            # Range rộng để catch tất cả sắc độ xanh lá
             mask_green1 = cv2.inRange(roi_hsv,
-                                     np.array([35, 60, 60]),
-                                     np.array([90, 255, 255]))
+                                    np.array([35, 60, 60]),
+                                    np.array([90, 255, 255]))
             
             mask_green2 = cv2.inRange(roi_hsv,
-                                     np.array([40, 40, 80]),
-                                     np.array([85, 255, 255]))
+                                    np.array([40, 40, 80]),
+                                    np.array([85, 255, 255]))
             
             mask_combined = cv2.bitwise_or(mask_green1, mask_green2)
             
@@ -387,9 +344,7 @@ class LoadImage:
             total_pixels = roi.shape[0] * roi.shape[1]
             green_percentage = (green_pixels / total_pixels) * 100
             
-            status = "✓ Ước lượng" if is_estimated else "✓ OCR"
-            
-            print(f"\nBuổi {chapter}.{letter} ({status}):")
+            print(f"\nBuổi {chapter}.{letter}:")
             print(f"  Vị trí: Y={y}, X={x}")
             print(f"  ROI: {roi.shape[1]}x{roi.shape[0]}px")
             print(f"  Pixels xanh: {green_pixels}/{total_pixels} ({green_percentage:.2f}%)")
@@ -408,27 +363,29 @@ class LoadImage:
         print("KẾT QUẢ CUỐI CÙNG")
         print("=" * 60)
         
-        for idx, letter in enumerate(['A', 'B', 'C', 'D'], 1):
-            if letter not in all_positions:
-                print(f"Buổi {idx}: ⚠️ Không tìm thấy")
-                incomplete_lessons.append(idx)
-            elif not all_positions[letter]['has_checkmark']:
-                chapter = all_positions[letter]['chapter']
+        # ✅ CHỈ xử lý các buổi THỰC SỰ tìm thấy
+        for letter in sorted(lessons_detected.keys()):
+            info = lessons_detected[letter]
+            chapter = info['chapter']
+            idx = ord(letter) - ord('A') + 1  # A=1, B=2, C=3, D=4
+            
+            if not info['has_checkmark']:
                 print(f"Buổi {idx} ({chapter}.{letter}): ❌ CHƯA HOÀN THÀNH")
                 incomplete_lessons.append(idx)
             else:
-                chapter = all_positions[letter]['chapter']
                 print(f"Buổi {idx} ({chapter}.{letter}): ✅ ĐÃ HOÀN THÀNH")
         
+        print(f"\n📊 Tổng số buổi trong chương: {len(lessons_detected)}")
+        
         if incomplete_lessons:
-            print(f"\n🎯 CẦN HOÀN THÀNH CÁC BUỔI: {incomplete_lessons}")
+            print(f"🎯 CẦN HOÀN THÀNH CÁC BUỔI: {incomplete_lessons}")
         else:
-            print(f"\n✅ TẤT CẢ BUỔI ĐÃ HOÀN THÀNH!")
+            print(f"✅ TẤT CẢ BUỔI ĐÃ HOÀN THÀNH!")
         
         print("=" * 60)
         
         return incomplete_lessons
-    
+        
     def get_lesson_homework(self, image_path):
         """
         Phát hiện bài tập chưa hoàn thành - PHƯƠNG PHÁP CHÍNH XÁC NHẤT

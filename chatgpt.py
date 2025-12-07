@@ -1,11 +1,22 @@
-import google.generativeai as genai
-from gotrue import model
+from groq import Groq
 class GeminiChatGPT:
     def __init__(self):
-        genai.configure(api_key="AIzaSyB0zaSe78bLdBvMniM9EnmfNWYi16L2OaM")   # Thay bằng API key của bạn
+        self.client = Groq(api_key="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")
     
     def get_response(self, messages):
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        resp = self.client.chat.completions.create(
+            model="llama-3.3-70b-versatile",   # Model mạnh nhất, free
+            messages=[
+                {
+                    "role": "user",
+                    "content": messages + 
+                               "\nChỉ trả lời đúng 1 ký tự trong A, B, C hoặc D. Không giải thích."
+                }
+            ]
+        )
 
-        resp = model.generate_content(f'{messages}, chỉ trả lời ABCD thôi nhé, không trả lời thêm bất kì điều gì nữa chỉ duy nhất trả lời ABCD thôi, tuyệt đối không thêm bất kì cái gì nữa')
-        return resp.text
+        return resp.choices[0].message.content.strip()
+
+# re = GeminiChatGPT().get_response("Câu hỏi là gì? A. Đáp án A B. Đáp án B C. Đáp án C D. Đáp án D")
+# print(re) 
+# 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

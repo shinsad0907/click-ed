@@ -36,24 +36,49 @@ class MainClicked:
         ]
         self.success_click = (250,1200)
     def make_homework(self,ld):
-        for i in range(20):
+        completed_count = 0
+        previous_question = None
+        
+        while completed_count < 20:
             try:
-                path = ld.capture_ldplayer_screen()
-                question_answer = LoadImage().extract_question_answers(path)
-                ask = GeminiChatGPT().get_response(question_answer)
-                print("Đáp án ChatGPT trả về:", ask)
-
-                if 'D' in ask.split():
-                    ld.click(40,570)
-                elif 'C' in ask.split():
-                    ld.click(40,380)
-                elif 'B' in ask.split():
-                    ld.click(40,450)
-                elif 'A' in ask.split():
-                    ld.click(40,300)
-                ld.click(250,1200)
+                # Lấy đề bài hiện tại
+                question_answer = ld.get_question_and_answers()
+                
+                # Kiểm tra xem đề bài có thay đổi hay không
+                if question_answer != previous_question:
+                    # Đề bài thay đổi = câu mới
+                    print(f"🔄 Câu mới phát hiện (hoàn thành: {completed_count}/20)")
+                    print(f"Đề bài: {question_answer[:100]}...")
+                    
+                    # Lấy đáp án và tìm câu trả lời
+                    find_answers = ld.find_answers_by_xml()
+                    ask = GeminiChatGPT().get_response(question_answer)
+                    print("✅ Đáp án ChatGPT trả về:", ask)
+                    
+                    # Click vào đáp án đúng
+                    if 'D' in ask.split():
+                        ld.click(find_answers["D"][0], find_answers["D"][1])
+                    elif 'C' in ask.split():
+                        ld.click(find_answers["C"][0], find_answers["C"][1])
+                    elif 'B' in ask.split():
+                        ld.click(find_answers["B"][0], find_answers["B"][1])
+                    elif 'A' in ask.split():
+                        ld.click(find_answers["A"][0], find_answers["A"][1])
+                    
+                    # Click nút "Tiếp theo"
+                    ld.click(250,1200)
+                    sleep(2)
+                    # Cập nhật biến để kiểm tra lần tiếp theo
+                    previous_question = question_answer
+                    completed_count += 1
+                    print(f"✓ Hoàn thành: {completed_count}/20\n")
+                else:
+                    # Đề bài chưa thay đổi = vẫn cùng câu, chờ và retry
+                    print("⏳ Đề bài chưa thay đổi, chờ...")
+                    sleep(1)
             except Exception as e:
-                print("Lỗi khi làm bài tập:", e)
+                print("⚠️ Lỗi khi làm bài tập:", e)
+                sleep(1)
         ld.click(459,750)
         ld.click(459,700)
         ld.click(40,75)
@@ -125,25 +150,29 @@ class MainClicked:
                         ld.click(self.chapter_session_list[0][0], self.chapter_session_list[0][1])
                         path_image = ld.capture_ldplayer_screen()
                         remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        sleep(remaining_time)
+                        if remaining_time and remaining_time > 0:
+                            sleep(remaining_time)
                         ld.click(37,70)
                     if 2 in session :
                         ld.click(self.chapter_session_list[1][0], self.chapter_session_list[1][1])
                         path_image = ld.capture_ldplayer_screen()
                         remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        sleep(remaining_time)
+                        if remaining_time and remaining_time > 0:
+                            sleep(remaining_time)
                         ld.click(37,70)
                     if 3 in session :
                         ld.click(self.chapter_session_list[2][0], self.chapter_session_list[2][1])
                         path_image = ld.capture_ldplayer_screen()
                         remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        sleep(remaining_time)
+                        if remaining_time and remaining_time > 0:
+                            sleep(remaining_time)
                         ld.click(37,70)
                     if 4 in session :
                         ld.click(self.chapter_session_list[3][0], self.chapter_session_list[3][1])
                         path_image = ld.capture_ldplayer_screen()
                         remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        sleep(remaining_time)
+                        if remaining_time and remaining_time > 0:
+                            sleep(remaining_time)
                         ld.click(37,70)
                     
 MainClicked().main_clicked()

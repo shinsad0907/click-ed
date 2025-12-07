@@ -131,6 +131,38 @@ class ldplayer:
                 answers["D"] = self.parse_bounds(bounds)
 
         return answers
+    def get_question_and_answers(self):
+        xml_file = self.dump_xml()
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        question = ""
+        answers = {}
+
+        for node in root.iter("node"):
+            desc = node.attrib.get("content-desc", "")
+            bounds = node.attrib.get("bounds", "")
+
+            if not desc:
+                continue
+
+            # Tìm đáp án
+            if desc.startswith("A."):
+                answers["A"] = (desc, self.parse_bounds(bounds))
+            elif desc.startswith("B."):
+                answers["B"] = (desc, self.parse_bounds(bounds))
+            elif desc.startswith("C."):
+                answers["C"] = (desc, self.parse_bounds(bounds))
+            elif desc.startswith("D."):
+                answers["D"] = (desc, self.parse_bounds(bounds))
+            else:
+                # Cái còn lại là đề bài
+                # Lọc đề: phải dài + chứa dấu chấm hỏi hoặc câu mô tả
+                if len(desc) > 10:  
+                    question = desc
+
+        return question + "\n" +answers["A"][0] + "\n" +answers["B"][0] + "\n" +answers["C"][0] + "\n" +answers["D"][0]
+
 # ld = ldplayer()
 # path = ld.capture_ldplayer_screen()
 
