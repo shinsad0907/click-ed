@@ -7,52 +7,57 @@ from time import sleep
 class MainClicked:
     def __init__(self, dataaccount_clicked=None):
         self.click_chapter_list = [
-            (110,308), # Chương 1
-            (450,308), # Chương 2
-            (300,485), # Chương 3
-            (165,660), # Chương 4
-            (450,660), # Chương 5
-            (300,850), # Chương 6
-            (165,1020), # Chương 7
+            (110,308),
+            (450,308),
+            (300,485),
+            (165,660),
+            (450,660),
+            (300,850),
+            (165,1020),
         ]
+
         self.click_chapter = (170,430)
+
         self.chapter_session_list = [
-            (175,360), # Buổi 1
-            (175,560), # Buổi 2
-            (175,760), # Buổi 3
-            (175,960), # Buổi 4
+            (175,360),
+            (175,560),
+            (175,760),
+            (175,960),
         ]
+
         self.chapter_homework_list = [
-            (100,300), # Bài A
-            (100,500), # Bài B
-            (100,700), # Bài C
-            (100,900), # Bài D
+            (100,300),
+            (100,500),
+            (100,700),
+            (100,900),
         ]
+
         self.click_homework = (310,150)
+
         self.click_homework_list = [
-            (40,300), # Bài A
-            (40,380), # Bài B
-            (40,450), # Bài C
-            (40,570), # Bài D
+            (40,300),
+            (40,380),
+            (40,450),
+            (40,570),
         ]
         self.success_click = (250,1200)
 
-
+        # ====== Sửa lỗi tại đây ======
         self.dataaccount_clicked = dataaccount_clicked
-        self.account_info = self.dataaccount_clicked[dataaccount_clicked]
+        self.account_info = dataaccount_clicked["dataaccount_clicked"]
         self.name_ldplayer = dataaccount_clicked["name_ldplayer"]
         self.ldplayer_len = dataaccount_clicked["ldplayer_len"]
         self.account_index = dataaccount_clicked["account_index"]
 
-    def login_clicked(self,ld):
-        pass
+
 
     def open_or_check_ldplayer(self,ld):
         list_devices = ld.DEVICE()
         print(f"Đang mở LDPlayer: {self.name_ldplayer}")
         ld.open_ldplayer(self.name_ldplayer)
         while True:
-            if list_devices >= self.ldplayer_len:
+            print(len(list_devices), self.ldplayer_len)
+            if len(list_devices) >= self.ldplayer_len:
                 print(f"LDPlayer {self.name_ldplayer} đã sẵn sàng.")
                 break
             else:
@@ -66,6 +71,24 @@ class MainClicked:
                 sleep(5)
 
         return True
+    
+    def setup_clicked_or_log(self, ld):
+        tk, mk = self.account_info.split('|')
+        if ld.setup_clicked():
+            while True:
+                if ld.check_login():
+                    ld.click(402, 1244)
+                    sleep(2)
+                    ld.click(170, 330)
+                    ld.input(tk)
+                    ld.click(170, 470)
+                    ld.input(mk)
+                    ld.click(245, 680)
+                    if ld.check_login_falled():
+                        print(f'{tk, mk} không chính xác')
+                        return False
+                    else:
+                        return True
 
     def make_homework(self,ld):
         completed_count = 0
@@ -120,11 +143,17 @@ class MainClicked:
 
     def main_clicked(self):
         # print(self.click_chapter_list[0])
-        ld = ldplayer()
+        ld = ldplayer(self.account_index)
         device = ld.DEVICE()
 
         if self.open_or_check_ldplayer(ld):
             print(f"🚀 Bắt đầu tự động hóa cho LDPlayer: {self.name_ldplayer}")
+        
+        if self.setup_clicked_or_log(ld):
+            print('login thành công')
+        else:
+            print('login không thành công')
+            return
 
         chapter = ld.detect_unfinished_chapters_fixed()
         for ct in chapter:
@@ -183,28 +212,28 @@ class MainClicked:
                     else:
                         if 1 in session :
                             ld.click(self.chapter_session_list[0][0], self.chapter_session_list[0][1])
-                            path_image = ld.capture_ldplayer_screen()
+                            path_image = ld.capture_ldplayer_screen(self.name_ldplayer)
                             remaining_time = LoadImage().get_video_remaining_time(path_image)
                             if remaining_time and remaining_time > 0:
                                 sleep(remaining_time)
                             ld.click(37,70)
                         if 2 in session :
                             ld.click(self.chapter_session_list[1][0], self.chapter_session_list[1][1])
-                            path_image = ld.capture_ldplayer_screen()
+                            path_image = ld.capture_ldplayer_screen(self.name_ldplayer)
                             remaining_time = LoadImage().get_video_remaining_time(path_image)
                             if remaining_time and remaining_time > 0:
                                 sleep(remaining_time)
                             ld.click(37,70)
                         if 3 in session :
                             ld.click(self.chapter_session_list[2][0], self.chapter_session_list[2][1])
-                            path_image = ld.capture_ldplayer_screen()
+                            path_image = ld.capture_ldplayer_screen(self.name_ldplayer)
                             remaining_time = LoadImage().get_video_remaining_time(path_image)
                             if remaining_time and remaining_time > 0:
                                 sleep(remaining_time)
                             ld.click(37,70)
                         if 4 in session :
                             ld.click(self.chapter_session_list[3][0], self.chapter_session_list[3][1])
-                            path_image = ld.capture_ldplayer_screen()
+                            path_image = ld.capture_ldplayer_screen(self.name_ldplayer)
                             remaining_time = LoadImage().get_video_remaining_time(path_image)
                             if remaining_time and remaining_time > 0:
                                 sleep(remaining_time)
@@ -213,31 +242,30 @@ class MainClicked:
 
 if __name__ == "__main__":
     try:
-        with open('log.txt', 'r', encoding='utf-8') as f:
+        with open(r'D:\shin\click-ed\log.txt', 'r', encoding='utf-8') as f:
             data_account_clicked = f.readlines()
-        if len(data_account_clicked) > 5:
-            print('mỗi lần chạy chỉ được 5 tài khoản') 
-            exit()
-        list_ldplayer = ldplayer().get_ldplayer_names()
-
-        for i, account in enumerate(data_account_clicked, start=0):
-            account = account.strip()
-            main_thread = threading.Thread(
-                target=MainClicked(
-                    {
-                        "dataaccount_clicked": account,
-                        "name_ldplayer": list_ldplayer[i],
-                        "ldplayer_len": len(list_ldplayer),
-                        "account_index": i
-                    }
-                ).main_clicked
-            )
-
-            main_thread.start()
-            main_thread.join()
-
-
+        
     except:
         print("Chạy lần đầu tiên, tạo file log.txt và khởi động lại chương trình.")
+    if len(data_account_clicked) > 5:
+        print('mỗi lần chạy chỉ được 5 tài khoản') 
+        exit()
+    list_ldplayer = ldplayer().get_ldplayer_names()
+
+    for i, account in enumerate(data_account_clicked, start=0):
+        account = account.strip()
+        main_thread = threading.Thread(
+            target=MainClicked(
+                {
+                    "dataaccount_clicked": account,
+                    "name_ldplayer": list_ldplayer[i],
+                    "ldplayer_len": len(list_ldplayer),
+                    "account_index": i
+                }
+            ).main_clicked
+        )
+
+        main_thread.start()
+        main_thread.join()
 # MainClicked().main_clicked()
 

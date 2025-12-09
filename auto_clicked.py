@@ -18,9 +18,10 @@ import xml.etree.ElementTree as ET
 import re
 
 class ldplayer:
-    def __init__(self) -> None:
+    def __init__(self,index=0) -> None:
         pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
         self.ADB = 'C:\\LDPlayer\\LDPlayer9'
+        self.index = index
 
     def adb_command(self,command):
         result = subprocess.run(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -102,12 +103,12 @@ class ldplayer:
         return False
     
     def input(self,text):
-        command = fr'{self.ADB}\\adb.exe -s {self.DEVICE()[0]} shell input text {text}'
+        command = fr'{self.ADB}\\adb.exe -s {self.DEVICE()[self.index]} shell input text {text}'
         self.adb_command(command)
         sleep(2)
 
     def click(self,x,y):
-        command = fr'{self.ADB}\\adb.exe -s {self.DEVICE()[0]} shell input tap {x} {y}'
+        command = fr'{self.ADB}\\adb.exe -s {self.DEVICE()[self.index]} shell input tap {x} {y}'
         self.adb_command(command)
         sleep(2)
         
@@ -127,9 +128,37 @@ class ldplayer:
         # print(self.list_device)
         return self.list_device
 
-
     def check_login(self):
-        pass
+        xml_file = self.dump_xml()  # Tạo file XML
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        # Duyệt toàn bộ node trong cây XML
+        for node in root.iter():
+            content_desc = node.attrib.get("content-desc", "")
+            if content_desc.strip() == "Đăng nhập":
+                return True
+
+        return False
+
+
+    def setup_clicked(self):
+        """
+        Xóa dữ liệu ứng dụng CLICK-Ed + mở lại ứng dụng.
+        """
+        device = self.DEVICE()[self.index]
+
+        # XÓA DỮ LIỆU ỨNG DỤNG
+        clear_cmd = fr'{self.ADB}\adb.exe -s {device} shell pm clear realjobscomltd.clickqa'
+        self.adb_command(clear_cmd)
+        sleep(1.5)
+
+        # MỞ ỨNG DỤNG CLICK-Ed
+        open_cmd = fr'{self.ADB}\adb.exe -s {device} shell monkey -p realjobscomltd.clickqa 1'
+        self.adb_command(open_cmd)
+        sleep(2.5)
+
+        return True
 
     # def check_devices(self):
     #     devices = self.DEVICE()
@@ -139,11 +168,11 @@ class ldplayer:
 
     def dump_xml(self):
         # Dump UI
-        cmd1 = fr"{self.ADB}\adb.exe -s {self.DEVICE()[0]} shell uiautomator dump /sdcard/view.xml"
+        cmd1 = fr"{self.ADB}\adb.exe -s {self.DEVICE()[self.index]} shell uiautomator dump /sdcard/view.xml"
         subprocess.run(cmd1, shell=True)
 
         # Copy file về PC
-        cmd2 = fr"{self.ADB}\adb.exe -s {self.DEVICE()[0]} pull /sdcard/view.xml view.xml"
+        cmd2 = fr"{self.ADB}\adb.exe -s {self.DEVICE()[self.index]} pull /sdcard/view.xml view.xml"
         subprocess.run(cmd2, shell=True)
 
         return "view.xml"
@@ -179,6 +208,7 @@ class ldplayer:
                 answers["D"] = self.parse_bounds(bounds)
 
         return answers
+    
     def get_question_and_answers(self):
         xml_file = self.dump_xml()
         tree = ET.parse(xml_file)
@@ -210,6 +240,7 @@ class ldplayer:
                     question = desc
 
         return question + "\n" +answers["A"][0] + "\n" +answers["B"][0] + "\n" +answers["C"][0] + "\n" +answers["D"][0]
+    
     def detect_unfinished_videos(self):
         xml_file = self.dump_xml()
         tree = ET.parse(xml_file)
@@ -260,6 +291,21 @@ class ldplayer:
         if vm_list:
             # Lấy ID của máy ảo đầu tiên (giả sử ID là phần đầu tiên của mỗi dòng)
             return vm_list
+        
+    def check_login_failed(self):
+        xml_file = self.dump_xml()
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+
+        for node in root.iter():
+            content_desc = node.attrib.get("content-desc", "").strip()
+
+            # Nếu vẫn thấy nút Đăng nhập → login fail
+            if content_desc == "Đăng nhập":
+                return True
+
+        return False
+
     def detect_unfinished_lessons(self):
         """
         Trả về list duy nhất gồm các bài chưa làm: ['A','B','C',...]
@@ -348,7 +394,7 @@ class ldplayer:
                 break
 
             # nếu đã hoàn thành thì quay lại màn danh sách chương
-            self.adb_command(fr'{self.ADB}\\adb.exe -s {self.DEVICE()[0]} shell input keyevent 4')
+            self.adb_command(fr'{self.ADB}\\adb.exe -s {self.DEVICE()[self.index]} shell input keyevent 4')
             sleep(1.2)
 
         return unfinished
@@ -358,6 +404,6 @@ class ldplayer:
 
 
 # ld = ldplayer()
-# path = ld.detect_unfinished_chapters_fixed()
+# path = ld.dump_xml()
 # print(path)
 
