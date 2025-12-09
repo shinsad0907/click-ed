@@ -1,10 +1,11 @@
 from auto_clicked import ldplayer
 from load_image import LoadImage
 from chatgpt import GeminiChatGPT
+import threading
 from time import sleep
 
 class MainClicked:
-    def __init__(self):
+    def __init__(self, dataaccount_clicked=None):
         self.click_chapter_list = [
             (110,308), # Chương 1
             (450,308), # Chương 2
@@ -35,6 +36,37 @@ class MainClicked:
             (40,570), # Bài D
         ]
         self.success_click = (250,1200)
+
+
+        self.dataaccount_clicked = dataaccount_clicked
+        self.account_info = self.dataaccount_clicked[dataaccount_clicked]
+        self.name_ldplayer = dataaccount_clicked["name_ldplayer"]
+        self.ldplayer_len = dataaccount_clicked["ldplayer_len"]
+        self.account_index = dataaccount_clicked["account_index"]
+
+    def login_clicked(self,ld):
+        pass
+
+    def open_or_check_ldplayer(self,ld):
+        list_devices = ld.DEVICE()
+        print(f"Đang mở LDPlayer: {self.name_ldplayer}")
+        ld.open_ldplayer(self.name_ldplayer)
+        while True:
+            if list_devices >= self.ldplayer_len:
+                print(f"LDPlayer {self.name_ldplayer} đã sẵn sàng.")
+                break
+            else:
+                sleep(5)
+
+        while True:
+            if ld.is_ldplayer_in_home(ld.DEVICE()[self.account_index]):
+                print(f"LDPlayer {self.name_ldplayer} đã kết nối ADB.")
+                break
+            else:
+                sleep(5)
+
+        return True
+
     def make_homework(self,ld):
         completed_count = 0
         previous_question = None
@@ -83,96 +115,129 @@ class MainClicked:
         ld.click(459,700)
         ld.click(40,75)
         ld.click(40,75)
+
+    
+
     def main_clicked(self):
         # print(self.click_chapter_list[0])
         ld = ldplayer()
         device = ld.DEVICE()
-        if not device:
-            print("Không tìm thấy thiết bị LDPlayer!")
-            return
-        
-        path_image = ld.capture_ldplayer_screen()
-        chapter = LoadImage().get_chapter(path_image)
-        if chapter:
-            print(f"Đang ở chương {chapter}")
-            x, y = self.click_chapter_list[chapter - 1]
-            print(f"Click vào chương tại tọa độ: ({x}, {y})")
-            ld.click(x, y)
-            sleep(2)
-            x, y = self.click_chapter
-            ld.click(x, y)
-            sleep(2)
-            for i in range(2):
-                chapter_session = ld.capture_ldplayer_screen()
-                session = LoadImage().get_lesson_status(chapter_session)
-                if session == []:
-                    print("Đã hoàn thành tất cả các buổi học.")
-                    x, y = self.click_homework
-                    ld.click(x, y)
-                    sleep(2)
-                    homework_session = ld.detect_unfinished_lessons()
-                    print("Bài tập cần làm shinsad:", homework_session)
-                    if homework_session:
-                        for hw in homework_session:
-                            if hw == 'A':
-                                x, y = self.chapter_homework_list[0]
-                                ld.click(x, y)
+
+        if self.open_or_check_ldplayer(ld):
+            print(f"🚀 Bắt đầu tự động hóa cho LDPlayer: {self.name_ldplayer}")
+
+        chapter = ld.detect_unfinished_chapters_fixed()
+        for ct in chapter:
+            if ct:
+                print(f"Đang ở chương {ct}")
+                x, y = self.click_chapter_list[ct - 1]
+                print(f"Click vào chương tại tọa độ: ({x}, {y})")
+                ld.click(x, y)
+                sleep(2)
+                x, y = self.click_chapter
+                ld.click(x, y)
+                sleep(2)
+                while True:
+                    session = ld.detect_unfinished_videos()
+                    if session == []:
+                        print("Đã hoàn thành tất cả các buổi học.")
+                        x, y = self.click_homework
+                        ld.click(x, y)
+                        sleep(2)
+                        homework_session = ld.detect_unfinished_lessons()
+                        print("Bài tập cần làm shinsad:", homework_session)
+                        if homework_session:
+                            for hw in homework_session:
+                                if hw == 'A':
+                                    x, y = self.chapter_homework_list[0]
+                                    ld.click(x, y)
+                                    sleep(2)
+                                    ld.click(360, 720)
+                                    ld.click(250,210)
+                                    self.make_homework(ld)
+                                if hw == 'B':
+                                    x, y = self.chapter_homework_list[1]
+                                    ld.click(x, y)
+                                    sleep(2)
+                                    ld.click(360, 720)
+                                    ld.click(250,210)
+                                    self.make_homework(ld)
+                                if hw == 'C':
+                                    x, y = self.chapter_homework_list[2]
+                                    ld.click(x, y)
+                                    sleep(2)
+                                    ld.click(360, 720)
+                                    ld.click(250,210)
+                                    self.make_homework(ld)
+                                if hw == 'D':
+                                    x, y = self.chapter_homework_list[3]
+                                    ld.click(x, y)
+                                    sleep(2)
+                                    ld.click(360, 720)
+                                    ld.click(250,210)
+                                    self.make_homework(ld)
                                 sleep(2)
-                                ld.click(360, 720)
-                                ld.click(250,210)
-                                self.make_homework(ld)
-                            if hw == 'B':
-                                x, y = self.chapter_homework_list[1]
-                                ld.click(x, y)
-                                sleep(2)
-                                ld.click(360, 720)
-                                ld.click(250,210)
-                                self.make_homework(ld)
-                            if hw == 'C':
-                                x, y = self.chapter_homework_list[2]
-                                ld.click(x, y)
-                                sleep(2)
-                                ld.click(360, 720)
-                                ld.click(250,210)
-                                self.make_homework(ld)
-                            if hw == 'D':
-                                x, y = self.chapter_homework_list[3]
-                                ld.click(x, y)
-                                sleep(2)
-                                ld.click(360, 720)
-                                ld.click(250,210)
-                                self.make_homework(ld)
-                            sleep(2)
-                    return
-                else:
-                    if 1 in session :
-                        ld.click(self.chapter_session_list[0][0], self.chapter_session_list[0][1])
-                        path_image = ld.capture_ldplayer_screen()
-                        remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        if remaining_time and remaining_time > 0:
-                            sleep(remaining_time)
                         ld.click(37,70)
-                    if 2 in session :
-                        ld.click(self.chapter_session_list[1][0], self.chapter_session_list[1][1])
-                        path_image = ld.capture_ldplayer_screen()
-                        remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        if remaining_time and remaining_time > 0:
-                            sleep(remaining_time)
                         ld.click(37,70)
-                    if 3 in session :
-                        ld.click(self.chapter_session_list[2][0], self.chapter_session_list[2][1])
-                        path_image = ld.capture_ldplayer_screen()
-                        remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        if remaining_time and remaining_time > 0:
-                            sleep(remaining_time)
-                        ld.click(37,70)
-                    if 4 in session :
-                        ld.click(self.chapter_session_list[3][0], self.chapter_session_list[3][1])
-                        path_image = ld.capture_ldplayer_screen()
-                        remaining_time = LoadImage().get_video_remaining_time(path_image)
-                        if remaining_time and remaining_time > 0:
-                            sleep(remaining_time)
-                        ld.click(37,70)
-                    
-MainClicked().main_clicked()
+                        break  # Thoát khỏi while loop để sang chương tiếp theo
+                    else:
+                        if 1 in session :
+                            ld.click(self.chapter_session_list[0][0], self.chapter_session_list[0][1])
+                            path_image = ld.capture_ldplayer_screen()
+                            remaining_time = LoadImage().get_video_remaining_time(path_image)
+                            if remaining_time and remaining_time > 0:
+                                sleep(remaining_time)
+                            ld.click(37,70)
+                        if 2 in session :
+                            ld.click(self.chapter_session_list[1][0], self.chapter_session_list[1][1])
+                            path_image = ld.capture_ldplayer_screen()
+                            remaining_time = LoadImage().get_video_remaining_time(path_image)
+                            if remaining_time and remaining_time > 0:
+                                sleep(remaining_time)
+                            ld.click(37,70)
+                        if 3 in session :
+                            ld.click(self.chapter_session_list[2][0], self.chapter_session_list[2][1])
+                            path_image = ld.capture_ldplayer_screen()
+                            remaining_time = LoadImage().get_video_remaining_time(path_image)
+                            if remaining_time and remaining_time > 0:
+                                sleep(remaining_time)
+                            ld.click(37,70)
+                        if 4 in session :
+                            ld.click(self.chapter_session_list[3][0], self.chapter_session_list[3][1])
+                            path_image = ld.capture_ldplayer_screen()
+                            remaining_time = LoadImage().get_video_remaining_time(path_image)
+                            if remaining_time and remaining_time > 0:
+                                sleep(remaining_time)
+                            ld.click(37,70)
+
+
+if __name__ == "__main__":
+    try:
+        with open('log.txt', 'r', encoding='utf-8') as f:
+            data_account_clicked = f.readlines()
+        if len(data_account_clicked) > 5:
+            print('mỗi lần chạy chỉ được 5 tài khoản') 
+            exit()
+        list_ldplayer = ldplayer().get_ldplayer_names()
+
+        for i, account in enumerate(data_account_clicked, start=0):
+            account = account.strip()
+            main_thread = threading.Thread(
+                target=MainClicked(
+                    {
+                        "dataaccount_clicked": account,
+                        "name_ldplayer": list_ldplayer[i],
+                        "ldplayer_len": len(list_ldplayer),
+                        "account_index": i
+                    }
+                ).main_clicked
+            )
+
+            main_thread.start()
+            main_thread.join()
+
+
+    except:
+        print("Chạy lần đầu tiên, tạo file log.txt và khởi động lại chương trình.")
+# MainClicked().main_clicked()
 

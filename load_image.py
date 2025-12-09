@@ -14,23 +14,26 @@ class LoadImage:
         self.reader = easyocr.Reader(['vi'])
     def get_chapter(self, image_path):
         """
-        Tìm chương cần làm tiếp theo bằng cách:
+        Tìm danh sách các chương cần làm tiếp theo bằng cách:
         1. Đọc text để tìm vị trí các chương
         2. Phân tích màu sắc tại vị trí mỗi chương để xác định trạng thái
+        
+        Returns:
+            list: Danh sách số chương cần làm. VD: [5, 6, 7]
         """
         
         # Đọc ảnh
         img = cv2.imread(image_path)
         if img is None:
             print("❌ Không thể đọc ảnh")
-            return None
+            return []
         
         # --- BƯỚC 1: ĐỌC TEXT VÀ TÌM VỊ TRÍ CHƯƠNG ---
         results = self.reader.readtext(image_path, paragraph=False)
         
         if not results:
             print("❌ Không đọc được text nào từ ảnh")
-            return None
+            return []
         
         # Lưu thông tin các chương tìm được
         chapters_found = []
@@ -61,7 +64,7 @@ class LoadImage:
         
         if not chapters_found:
             print("❌ Không tìm thấy chương nào")
-            return None
+            return []
         
         # Sắp xếp theo số chương
         chapters_found.sort(key=lambda x: x['number'])
@@ -138,36 +141,55 @@ class LoadImage:
                     chapter['status'] = 'locked'
                     print(f"Chương {chapter['number']}: 🔒 Bị khóa (mặc định)")
         
-        # --- BƯỚC 3: TÌM CHƯƠNG CẦN LÀM ---
+        # --- BƯỚC 3: TÌM DANH SÁCH CHƯƠNG CẦN LÀM ---
         print("\n=== KẾT QUẢ PHÂN TÍCH ===")
         
-        # Ưu tiên 1: Chương đang làm (current)
-        for chapter in chapters_found:
+        chapters_to_do = []
+        
+        # Tìm chương đang làm (current) - bắt đầu từ đó
+        current_chapter_idx = -1
+        for idx, chapter in enumerate(chapters_found):
             if chapter['status'] == 'current':
-                print(f"🎯 CHƯƠNG CẦN LÀM: {chapter['number']} (đang làm dở)")
-                return chapter['number']
+                current_chapter_idx = idx
+                print(f"🎯 Tìm thấy chương đang làm: {chapter['number']}")
+                break
         
-        # Ưu tiên 2: Chương đầu tiên chưa hoàn thành và chưa bị khóa
-        for chapter in chapters_found:
-            if chapter['status'] != 'completed' and chapter['status'] != 'locked':
-                print(f"🎯 CHƯƠNG CẦN LÀM: {chapter['number']}")
-                return chapter['number']
+        # Nếu có chương đang làm, thêm nó và các chương sau nó (chưa hoàn thành)
+        if current_chapter_idx >= 0:
+            for idx in range(current_chapter_idx, len(chapters_found)):
+                chapter = chapters_found[idx]
+                if chapter['status'] != 'completed':
+                    chapters_to_do.append(chapter['number'])
+                    print(f"  ➕ Thêm chương {chapter['number']} (trạng thái: {chapter['status']})")
+        else:
+            # Nếu không có chương đang làm, tìm chương đầu tiên chưa hoàn thành
+            for chapter in chapters_found:
+                if chapter['status'] != 'completed':
+                    chapters_to_do.append(chapter['number'])
+                    print(f"  ➕ Thêm chương {chapter['number']} (trạng thái: {chapter['status']})")
         
-        # Ưu tiên 3: Chương sau chương cuối đã hoàn thành
-        completed_chapters = [ch for ch in chapters_found if ch['status'] == 'completed']
-        if completed_chapters:
-            next_chapter = completed_chapters[-1]['number'] + 1
-            print(f"🎯 Tất cả đã hoàn thành → Chương tiếp theo: {next_chapter}")
-            return next_chapter
+        if not chapters_to_do:
+            # Nếu tất cả đã hoàn thành, kiểm tra chương tiếp theo
+            completed_chapters = [ch for ch in chapters_found if ch['status'] == 'completed']
+            if completed_chapters:
+                next_chapter = completed_chapters[-1]['number'] + 1
+                print(f"✅ Tất cả chương đã hoàn thành → Chương tiếp theo: {next_chapter}")
+                chapters_to_do = [next_chapter]
+            else:
+                # Nếu tất cả chương (2, 3, 4, 5, 6...) bị khóa → chương 1 là chưa làm
+                print(f"⚠️ Tất cả chương từ chương 2 trở đi bị khóa → Chương 1 là chưa làm")
+                chapters_to_do = [1]
         
-        # Ưu tiên 4: Nếu tất cả chương đều bị khóa thì làm chương 1
-        locked_chapters = [ch for ch in chapters_found if ch['status'] == 'locked']
-        if len(locked_chapters) == len(chapters_found):
-            print(f"⚠️ Tất cả chương đều bị khóa → Mặc định làm chương 1")
-            return 1
+        # THÊM LOGIC: Nếu chương 1 không tìm thấy nhưng có chương 2+ → thêm chương 1
+        min_chapter = min([ch['number'] for ch in chapters_found]) if chapters_found else 999
+        if min_chapter > 1 and 1 not in chapters_to_do:
+            print(f"⚠️ Chương 1 không tìm thấy nhưng chương {min_chapter}+ bị khóa → Chương 1 chưa làm")
+            chapters_to_do = [1] + chapters_to_do
         
-        print("⚠ Không xác định được chương cần làm")
-        return None
+        print(f"\n📊 DANH SÁCH CHƯƠNG CẦN LÀM: {chapters_to_do}")
+        print("=" * 60)
+        
+        return chapters_to_do
     
     def get_video_remaining_time(self, image_path):
         """
