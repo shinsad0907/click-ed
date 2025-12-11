@@ -31,12 +31,13 @@ class ldplayer:
         # Tên cửa sổ LDPlayer (bạn có thể đổi lại nếu khác)
         window_name = name_window
         
-        filename = "data_image/ldplayer_screenshot.png"
+        # Lưu ảnh riêng cho mỗi device - tránh ghi đè lẫn nhau
+        filename = f"data_image/ldplayer_screenshot_{name_window}.png"
 
         # Tìm cửa sổ LDPlayer
         hwnd = win32gui.FindWindow(None, window_name)
         if not hwnd:
-            print("Không tìm thấy cửa sổ LDPlayer!")
+            print(f"Không tìm thấy cửa sổ LDPlayer: {window_name}")
             return None
 
         # Lấy kích thước cửa sổ
@@ -66,6 +67,7 @@ class ldplayer:
         return filename
 
     def get_ldplayer_names(self):
+        """Lấy danh sách tên LDPlayer (hỗ trợ cả tên trùng)"""
         ldconsole = fr"{self.ADB}\ldconsole.exe"
 
         result = subprocess.run(
@@ -84,11 +86,32 @@ class ldplayer:
 
         return names
     
+    def get_ldplayer_ids(self):
+        """Lấy danh sách ID LDPlayer - để xử lý tên trùng"""
+        ldconsole = fr"{self.ADB}\ldconsole.exe"
+
+        result = subprocess.run(
+            [ldconsole, "list2"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        ids = []
+        for line in result.stdout.strip().split("\n"):
+            if line.strip():
+                parts = line.split(",")
+                ld_id = parts[0].strip()
+                ld_name = parts[1].strip()
+                ids.append((ld_id, ld_name))  # Trả về (ID, tên)
+
+        return ids
+    
     def open_ldplayer(self, name, ld_path = r"C:\LDPlayer\LDPlayer9"):
         ldconsole = fr"{ld_path}\ldconsole.exe"
         subprocess.run([ldconsole, "launch", "--name", name])
 
-    def is_ldplayer_in_home(device_id, adb_path=r"C:\LDPlayer\LDPlayer9"):
+    def is_ldplayer_in_home(self, device_id, adb_path=r"C:\LDPlayer\LDPlayer9"):
         cmd = [
             fr"{adb_path}\adb.exe", "-s", device_id,
             "shell", "dumpsys", "activity", "activities"
@@ -102,12 +125,68 @@ class ldplayer:
             return True
         return False
     
-    def input(self,text):
-        command = fr'{self.ADB}\\adb.exe -s {self.DEVICE()[self.index]} shell input text {text}'
-        self.adb_command(command)
+    def input(self, text):
+        """
+        Input text - hỗ trợ tiếng Việt và ký tự đặc biệt bằng shell command
+        """
+        device = self.DEVICE()[self.index]
+        
+        # Escape dấu ngoặc kép và ký tự đặc biệt
+        escaped_text = text.replace('"', '\\"').replace("'", "\\'")
+        
+        # Gửi text qua ADB shell input text
+        cmd = fr'{self.ADB}\adb.exe -s {device} shell input text "{escaped_text}"'
+        
+        try:
+            self.adb_command(cmd)
+        except Exception as e:
+            print(f"⚠️ Input text thất bại: {e}")
+        
         sleep(2)
 
+    def search_name_homework(self, name_homework):
+        """
+        Tìm tên bài tập trong XML và trả về tọa độ
+        
+        Args:
+            name_homework: Tên bài tập cần tìm (ví dụ: "lịch sử văn minh")
+        
+        Returns:
+            tuple: (x, y) tọa độ bài tập nếu tìm thấy, None nếu không tìm thấy
+        """
+        xml_file = self.dump_xml()  # Tạo file XML
+        tree = ET.parse(xml_file)
+        root = tree.getroot()
+        
+        name_homework_lower = name_homework.lower().strip()
+        
+        # Duyệt toàn bộ node trong cây XML
+        for node in root.iter():
+            content_desc = node.attrib.get("content-desc", "").strip().lower()
+            text = node.attrib.get("text", "").strip().lower()
+            bounds = node.attrib.get("bounds", "")
+            
+            # Kiểm tra xem tên bài tập có nằm trong content-desc hoặc text không
+            if name_homework_lower in content_desc or name_homework_lower in text:
+                print(f"✅ Tìm thấy bài tập: {name_homework}")
+                print(f"   Content-desc: {node.attrib.get('content-desc', '')}")
+                print(f"   Bounds: {bounds}")
+                
+                # Parse bounds để lấy tọa độ
+                if bounds:
+                    try:
+                        x, y = self.parse_bounds(bounds)
+                        print(f"   Tọa độ: ({x}, {y})")
+                        return (x, y)
+                    except Exception as e:
+                        print(f"⚠️ Lỗi parse bounds: {e}")
+                        return None
+        
+        print(f"❌ Không tìm thấy bài tập: {name_homework}")
+        return None
+
     def click(self,x,y):
+        self.index
         command = fr'{self.ADB}\\adb.exe -s {self.DEVICE()[self.index]} shell input tap {x} {y}'
         self.adb_command(command)
         sleep(2)
@@ -168,14 +247,16 @@ class ldplayer:
 
     def dump_xml(self):
         # Dump UI
-        cmd1 = fr"{self.ADB}\adb.exe -s {self.DEVICE()[self.index]} shell uiautomator dump /sdcard/view.xml"
+        device_id = self.DEVICE()[self.index]
+        cmd1 = fr"{self.ADB}\adb.exe -s {device_id} shell uiautomator dump /sdcard/view.xml"
         subprocess.run(cmd1, shell=True)
 
-        # Copy file về PC
-        cmd2 = fr"{self.ADB}\adb.exe -s {self.DEVICE()[self.index]} pull /sdcard/view.xml view.xml"
+        # Copy file về PC với tên riêng cho mỗi device
+        xml_filename = f"view_{device_id}.xml"
+        cmd2 = fr"{self.ADB}\adb.exe -s {device_id} pull /sdcard/view.xml {xml_filename}"
         subprocess.run(cmd2, shell=True)
 
-        return "view.xml"
+        return xml_filename
 
     def parse_bounds(self, bound_str):
         nums = list(map(int, re.findall(r"\d+", bound_str)))
@@ -198,14 +279,10 @@ class ldplayer:
             if not desc or not bounds:
                 continue
 
-            if desc.startswith("A."):
-                answers["A"] = self.parse_bounds(bounds)
-            elif desc.startswith("B."):
-                answers["B"] = self.parse_bounds(bounds)
-            elif desc.startswith("C."):
-                answers["C"] = self.parse_bounds(bounds)
-            elif desc.startswith("D."):
-                answers["D"] = self.parse_bounds(bounds)
+            # Detect tất cả câu từ A-Z, không chỉ A-D
+            if len(desc) > 0 and desc[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" and desc[1:2] == ".":
+                letter = desc[0]
+                answers[letter] = self.parse_bounds(bounds)
 
         return answers
     
@@ -224,64 +301,111 @@ class ldplayer:
             if not desc:
                 continue
 
-            # Tìm đáp án
-            if desc.startswith("A."):
-                answers["A"] = (desc, self.parse_bounds(bounds))
-            elif desc.startswith("B."):
-                answers["B"] = (desc, self.parse_bounds(bounds))
-            elif desc.startswith("C."):
-                answers["C"] = (desc, self.parse_bounds(bounds))
-            elif desc.startswith("D."):
-                answers["D"] = (desc, self.parse_bounds(bounds))
+            # Detect tất cả câu từ A-Z, không chỉ A-D
+            if len(desc) > 0 and desc[0] in "ABCDEFGHIJKLMNOPQRSTUVWXYZ" and desc[1:2] == ".":
+                letter = desc[0]
+                answers[letter] = (desc, self.parse_bounds(bounds))
             else:
                 # Cái còn lại là đề bài
                 # Lọc đề: phải dài + chứa dấu chấm hỏi hoặc câu mô tả
                 if len(desc) > 10:  
                     question = desc
 
-        return question + "\n" +answers["A"][0] + "\n" +answers["B"][0] + "\n" +answers["C"][0] + "\n" +answers["D"][0]
+        # Build output với tất cả câu tìm được
+        output = question
+        for letter in sorted(answers.keys()):
+            output += "\n" + answers[letter][0]
+        
+        return output
     
     def detect_unfinished_videos(self):
-        xml_file = self.dump_xml()
-        tree = ET.parse(xml_file)
-        root = tree.getroot()
-
-        unfinished = []
-
-        for node in root.iter("node"):
-            desc = node.attrib.get("content-desc", "")
-            if not desc:
-                continue
-
-            # Chỉ bắt các node video
-            if "Video" not in desc or "phút" not in desc:
-                continue
-
-            # Lấy số thứ tự video: dòng đầu tiên của content-desc
-            lines = desc.split("\n")
-            try:
-                index = int(lines[0].strip())
-            except:
-                continue
-
-            # Lấy % hoàn thành: dòng cuối
-            last_line = lines[-1].strip()
-
-            # Ví dụ: "100%" hoặc "75%"
-            if last_line.endswith("%"):
+        """
+        Kéo xuống dần để tìm HẾT video chưa xem.
+        Trả về dict: {index: (x, y)} - tọa độ thực tế của từng video
+        Sau đó kéo lên lại vị trí ban đầu.
+        """
+        device_id = self.DEVICE()[self.index]
+        unfinished = {}  # {index: (x, y)}
+        seen_videos = set()
+        max_scrolls = 10
+        no_new_video_count = 0
+        
+        print(f"📹 Bắt đầu tìm video chưa xem...")
+        
+        for scroll_count in range(max_scrolls):
+            xml_file = self.dump_xml()
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            
+            found_new = False
+            
+            for node in root.iter("node"):
+                desc = node.attrib.get("content-desc", "")
+                bounds = node.attrib.get("bounds", "")
+                
+                if not desc or not bounds:
+                    continue
+                
+                if "Video" not in desc or "phút" not in desc:
+                    continue
+                
+                lines = desc.split("\n")
                 try:
-                    percent = int(last_line.replace("%", ""))
+                    index = int(lines[0].strip())
                 except:
+                    continue
+                
+                if index in seen_videos:
+                    continue
+                
+                seen_videos.add(index)
+                found_new = True
+                
+                # Lấy % hoàn thành
+                last_line = lines[-1].strip()
+                if last_line.endswith("%"):
+                    try:
+                        percent = int(last_line.replace("%", ""))
+                    except:
+                        percent = 0
+                else:
                     percent = 0
+                
+                # Nếu chưa đủ 100% → LƯU TỌA ĐỘ
+                if percent < 100:
+                    x, y = self.parse_bounds(bounds)
+                    unfinished[index] = (x, y)
+                    print(f"   ➜ Video {index}: {percent}% - Tọa độ ({x}, {y})")
+            
+            if not found_new:
+                no_new_video_count += 1
+                if no_new_video_count >= 2:
+                    print(f"   ✓ Đã quét hết ({scroll_count + 1} lần kéo)")
+                    break
             else:
-                # Không có %, nghĩa là chưa xem
-                percent = 0
-
-            # Nếu chưa đủ 100%
-            if percent < 100:
-                unfinished.append(index)
-
+                no_new_video_count = 0
+            
+            if scroll_count < max_scrolls - 1:
+                cmd = f'{self.ADB}\\adb.exe -s {device_id} shell input swipe 300 800 300 400 300'
+                self.adb_command(cmd)
+                sleep(1)
+        
+        # KÉO LÊN LẠI
+        print(f"   ⬆ Kéo lên lại vị trí ban đầu...")
+        for _ in range(scroll_count + 1):
+            cmd = f'{self.ADB}\\adb.exe -s {device_id} shell input swipe 300 400 300 800 300'
+            self.adb_command(cmd)
+            sleep(0.5)
+        
+        print(f"📊 Tổng video chưa xem: {sorted(unfinished.keys())}")
         return unfinished
+
+    
+    def enter(self):
+        device = self.DEVICE()[self.index]
+        cmd = fr"{self.ADB}\adb.exe -s {device} shell input keyevent 66"
+        self.adb_command(cmd)
+
 
     def get_id_machine(self):
         result = subprocess.run([f'{self.ADB}\\ldconsole.exe', 'list'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -308,35 +432,112 @@ class ldplayer:
 
     def detect_unfinished_lessons(self):
         """
-        Trả về list duy nhất gồm các bài chưa làm: ['A','B','C',...]
-        Không quan tâm chương số.
-        Tối ưu: detect động số bài tập (0/5, 0/20, v.v.)
+        Kéo xuống tìm HẾT bài tập chưa làm.
+        Trả về dict: {letter: (x, y)} - tọa độ thực tế
+        """
+        device_id = self.DEVICE()[self.index]
+        unfinished = {}  # {letter: (x, y)}
+        seen_lessons = set()
+        max_scrolls = 10
+        no_new_lesson_count = 0
+        
+        print(f"📝 Bắt đầu tìm bài tập chưa làm...")
+        
+        for scroll_count in range(max_scrolls):
+            xml_file = self.dump_xml()
+            tree = ET.parse(xml_file)
+            root = tree.getroot()
+            
+            found_new = False
+            
+            for node in root.iter("node"):
+                desc = node.attrib.get("content-desc", "")
+                bounds = node.attrib.get("bounds", "")
+                
+                if not desc or not bounds:
+                    continue
+                
+                m = re.search(r"\d+\.([A-Za-z])", desc)
+                if not m:
+                    continue
+                
+                letter = m.group(1).upper()
+                
+                if letter in seen_lessons:
+                    continue
+                
+                seen_lessons.add(letter)
+                found_new = True
+                
+                # Kiểm tra chưa làm
+                if re.search(r"\b0/\d+\b", desc) or "Điểm đạt được: 0" in desc:
+                    x, y = self.parse_bounds(bounds)
+                    unfinished[letter] = (x, y)
+                    print(f"   ➜ Bài {letter}: Chưa làm - Tọa độ ({x}, {y})")
+            
+            if not found_new:
+                no_new_lesson_count += 1
+                if no_new_lesson_count >= 2:
+                    print(f"   ✓ Đã quét hết ({scroll_count + 1} lần kéo)")
+                    break
+            else:
+                no_new_lesson_count = 0
+            
+            if scroll_count < max_scrolls - 1:
+                cmd = f'{self.ADB}\\adb.exe -s {device_id} shell input swipe 300 800 300 400 300'
+                self.adb_command(cmd)
+                sleep(1)
+        
+        # KÉO LÊN LẠI
+        print(f"   ⬆ Kéo lên lại vị trí ban đầu...")
+        for _ in range(scroll_count + 1):
+            cmd = f'{self.ADB}\\adb.exe -s {device_id} shell input swipe 300 400 300 800 300'
+            self.adb_command(cmd)
+            sleep(0.5)
+        
+        print(f"📊 Tổng bài tập chưa làm: {sorted(unfinished.keys())}")
+        return unfinished
+    
+    def get_video_coords_from_xml(self):
+        """
+        Lấy tọa độ của các video từ XML (lấy động từ danh sách trên màn hình)
+        Trả về dict: {video_index: (x, y)} - tọa độ tiêu đề video
         """
         xml_file = self.dump_xml()
         tree = ET.parse(xml_file)
         root = tree.getroot()
-
-        result = set()
-
+        
+        video_coords = {}  # {index: (x, y)}
+        
         for node in root.iter("node"):
             desc = node.attrib.get("content-desc", "")
-            if not desc:
+            bounds = node.attrib.get("bounds", "")
+            
+            if not desc or not bounds:
                 continue
-
-            # Tìm dạng 1.A, 2.B, 10.C, ... → chỉ lấy chữ A/B/C
-            m = re.search(r"\d+\.([A-Za-z])", desc)
+            
+            # Tìm pattern "Video X" hoặc "X Video"
+            m = re.search(r'(?:Video\s+)?(\d+)(?:\s+Video)?', desc)
             if not m:
                 continue
-
-            letter = m.group(1).upper()
-
-            # Kiểm tra bài chưa làm - tìm pattern X/Y (X=điểm, Y=tổng bài)
-            # Nếu X = 0 thì chưa làm (bất kể Y là bao nhiêu)
-            if re.search(r"\b0/\d+\b", desc) or "Điểm đạt được: 0" in desc:
-                result.add(letter)
-
-        return sorted(list(result))
-    
+            
+            try:
+                video_idx = int(m.group(1))
+            except:
+                continue
+            
+            # Kiểm tra xem có chứa từ "Video" không
+            if "Video" not in desc:
+                continue
+            
+            # Lấy tọa độ
+            x, y = self.parse_bounds(bounds)
+            video_coords[video_idx] = (x, y)
+            print(f"   ✓ Video {video_idx}: Tọa độ ({x}, {y})")
+        
+        print(f"📊 Tổng video tìm được: {sorted(video_coords.keys())}")
+        return video_coords
+        
     def detect_unfinished_chapters_fixed(self):
         """
         Dùng tọa độ chương cố định bạn đưa.
@@ -403,7 +604,7 @@ class ldplayer:
 
 
 
-# ld = ldplayer()
-# path = ld.dump_xml()
-# print(path)
+ld = ldplayer()
+path = ld.DEVICE()
+print(path)
 

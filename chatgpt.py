@@ -1,7 +1,7 @@
 from groq import Groq
 class GeminiChatGPT:
     def __init__(self):
-        self.client = Groq(api_key="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")
+        self.client = Groq(api_key="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")
     
     def get_response(self, messages):
         resp = self.client.chat.completions.create(
@@ -19,4 +19,4 @@ class GeminiChatGPT:
 
 # re = GeminiChatGPT().get_response("Câu hỏi là gì? A. Đáp án A B. Đáp án B C. Đáp án C D. Đáp án D")
 # print(re) 
-# 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
+# # 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
